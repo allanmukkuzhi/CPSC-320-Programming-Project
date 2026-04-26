@@ -1,125 +1,54 @@
-================================================================================
 DNA Sequence Alignment — README
-================================================================================
-Authors: [Your Name] and [Partner Name]
 
---------------------------------------------------------------------------------
+Authors: Varvara Esina and Allan Mukkuzhi
+
 Overview
---------------------------------------------------------------------------------
-This program finds the best (minimum edit-distance) alignment of two DNA
-sequences given a gap penalty δ and a 4×4 mismatch-cost matrix α (indexed
-over {A, C, G, T}).
+This program implements the Sequence Alignment algorithm as defined in §6 
+(Dynamic Programming). It finds the minimum cost of an alignment between two DNA 
+sequences given a gap penalty δ and a 4×4 similarity matrix.
 
-The algorithm is the sequence-alignment dynamic programming procedure
-align(s, t) from §6 (Dynamic Programming) of the course lecture notes.
+Algorithm & Implementation
+The program uses a dynamic programming approach built on memoization to avoid 
+redundant computation.
 
---------------------------------------------------------------------------------
-Algorithm — align(s, t)   [§6, Lecture Notes]
---------------------------------------------------------------------------------
-Let s = s₁s₂…sₘ and t = t₁t₂…tₙ be the two input sequences.
+Subproblem Definition
+  For substrings s₁...sᵢ and t₁...tⱼ, the minimum alignment cost is opt(i, j). We store these values in a 2D memoization table M.
 
-SUBPROBLEM DEFINITION
-  For i = 0, 1, …, m and j = 0, 1, …, n, define
+Recurrence [§6]
+  opt(i, j) is calculated as the minimum of[cite: 1052]:
+    1. α_{sᵢtⱼ} + opt(i-1, j-1)  (Pairing sᵢ and tⱼ)
+    2. δ + opt(i-1, j)           (Gap in sequence t)
+    3. δ + opt(i, j-1)           (Gap in sequence s)
 
-      opt(i, j) = the minimum cost of an alignment of s₁…sᵢ and t₁…tⱼ.
+Traceback
+  Once the table M is filled, the program reconstructs the optimal alignment 
+  by backtracking from M[m, n] to M[0, 0] to identify the specific pairings 
+  and gaps.
 
-  We store all values in a memoization table M: M[i][j] = opt(i, j).
+Runtime
+  - Filling the (m+1)×(n+1) table takes O(mn) time.
+  - The traceback takes O(m+n) time.
+  - Total time complexity: O(mn).
 
-BASE CASES
-  opt(i, 0) = i · δ   (aligning s₁…sᵢ with the empty string needs i gaps)
-  opt(0, j) = j · δ   (symmetrically)
+Data Structures
+  - int[][] M: The shared table used for memoizing opt(i, j).
+  - ArrayList: Used to store the characters and penalties during traceback.
 
-RECURRENCE
-  For i ≥ 1, j ≥ 1, any optimal alignment of s₁…sᵢ and t₁…tⱼ must end
-  in one of three ways:
+Java Classes Used
+  - java.util.Scanner: For tokenized parsing of the input file.
+  - java.io.FileReader/BufferedReader: For efficient file handling.
+  - java.util.ArrayList/Collections: To manage and reverse alignment results.
 
-    1. sᵢ is paired with tⱼ (match or mismatch):
-         cost = α_{sᵢtⱼ} + opt(i−1, j−1)
+Steps to Run
+1. Compile the program:
+   javac DNAAlign.java
 
-    2. sᵢ is unmatched — a gap is placed in t:
-         cost = δ + opt(i−1, j)
+2. Execute the program with an input file:
+   java DNAAlign input.txt
 
-    3. tⱼ is unmatched — a gap is placed in s:
-         cost = δ + opt(i, j−1)
-
-  Therefore:
-    opt(i, j) = min( α_{sᵢtⱼ} + opt(i−1, j−1),
-                     δ          + opt(i−1, j),
-                     δ          + opt(i, j−1) )
-
-  The answer is opt(m, n) = M[m][n].
-
-TRACEBACK
-  After filling M, we start at M[m][n] and retrace the choices that
-  produced each opt value, working back to M[0][0], to reconstruct the
-  full aligned strings and per-column penalty values.
-
-RUNNING TIME
-  Filling the (m+1)×(n+1) table M takes O(mn) time (each of the
-  (m+1)(n+1) entries is computed in O(1) time by the recurrence).
-  The traceback visits at most m+n cells: O(m+n) time.
-  Total running time: O(mn).
-
-DATA STRUCTURES
-  int[][] M                       Memoization table (the DP table)
-  ArrayList<Character> / <Integer> Traceback lists (reversed at the end)
-
-JAVA APIS USED
-  java.io.BufferedReader, java.io.FileReader  — efficient file reading
-  java.util.Scanner                           — tokenized input parsing
-  java.util.ArrayList, java.util.Collections  — traceback list + reversal
-
---------------------------------------------------------------------------------
-Input file format
---------------------------------------------------------------------------------
-  <delta>
-  <row A of α>      (four space-separated integers)
-  <row C of α>
-  <row G of α>
-  <row T of α>
-  <sequence s>
-  <sequence t>
-
-Example (input.txt):
-  2
-  0 1 3 0
-  1 0 1 2
-  3 1 0 4
-  0 2 4 0
-  AAAGTCTGAC
-  AACGTTTAC
-
---------------------------------------------------------------------------------
-Compiling
---------------------------------------------------------------------------------
-Requires Java SE 8 or later. From the directory containing DNAAlign.java:
-
-  javac DNAAlign.java
-
---------------------------------------------------------------------------------
-Running
---------------------------------------------------------------------------------
-  java DNAAlign input.txt
-
-Expected output for the example above:
-
-  The best alignment is
-
-  A A A G T C T G A C
-  A A C G T T T - A C
-  0 0 1 0 0 2 0 2 0 0
-
-  with the minimum edit distance of 5.
-
---------------------------------------------------------------------------------
-Packaging as a JAR (for submission)
---------------------------------------------------------------------------------
-  jar cvf xy-ab.jar DNAAlign.java DNAAlign.class README
-
-Verify contents:
-  jar tf xy-ab.jar
-
-Run from the JAR:
-  java -cp xy-ab.jar DNAAlign input.txt
-
-================================================================================
+Input File Format
+The input file should follow this structure:
+  - <delta penalty>
+  - <4x4 mismatch matrix α (rows A, C, G, T)>
+  - <sequence s>
+  - <sequence t>

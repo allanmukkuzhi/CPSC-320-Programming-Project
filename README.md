@@ -58,7 +58,7 @@ For substrings s₁...sᵢ and t₁...tⱼ, the minimum alignment cost is opt(i,
 **Input File Format**
 
 The input file should follow this structure:
-  - <delta penalty>
+  - <gap \penalty>
   - <4x4 mismatch matrix α (rows A, C, G, T)>
-  - <sequence s>
-  - <sequence t>
+  - <sequence \s>
+  - <sequence \t>

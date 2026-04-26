@@ -4,18 +4,26 @@ import java.util.*;
 /**
  * DNAAlign.java
  *
- * <p>Reads a gap penalty δ, a 4×4 similarity matrix (indexed A,C,G,T), and two
- * DNA sequences from a text file, then computes and prints the best (minimum
- * edit-distance) alignment using a standard O(mn) sequence-alignment dynamic
- * programming algorithm (Needleman–Wunsch).
+ * <p>Reads a gap penalty delta (δ), a 4×4 mismatch-cost matrix (α), and two DNA
+ * sequences from a plain-text file, then computes and prints the best alignment
+ * and its minimum edit distance.
  *
- * <p>Usage:  java DNAAlign &lt;inputFile&gt;
+ * <p>The algorithm is the sequence-alignment dynamic programming procedure
+ * {@code align(s, t)} from §6 of the course lecture notes. We define
+ * {@code opt(i, j)} as the minimum cost of an alignment of the prefixes
+ * s₁…sᵢ and t₁…tⱼ, and store all values in a memoization table M
+ * (so {@code M[i][j] = opt(i, j)}). After filling M bottom-up, we traceback
+ * from {@code M[m][n]} to reconstruct the actual aligned strings and
+ * per-column penalties.
  *
- * <p>APIs used: java.io (BufferedReader, FileReader), java.util (Scanner, ArrayList,
- * Collections).
+ * <p>Usage: {@code java DNAAlign <inputFile>}
  *
- * @author  [Your Name]
- * @author  [Partner Name]
+ * <p>APIs used: {@code java.io.BufferedReader}, {@code java.io.FileReader},
+ * {@code java.util.Scanner}, {@code java.util.ArrayList},
+ * {@code java.util.Collections}.
+ *
+ * @author [Your Name]
+ * @author [Partner Name]
  * @version 1.0
  */
 public class DNAAlign {
@@ -24,26 +32,32 @@ public class DNAAlign {
     // Constants
     // -----------------------------------------------------------------------
 
-    /** The nucleotide order used to index the similarity matrix. */
+    /**
+     * Canonical ordering of nucleotides used to index the mismatch-cost
+     * matrix α: A=0, C=1, G=2, T=3.
+     */
     private static final String NUCLEOTIDES = "ACGT";
 
     // -----------------------------------------------------------------------
     // Fields
     // -----------------------------------------------------------------------
 
-    /** Gap penalty δ. */
+    /** The gap penalty δ. Every unmatched character (gap) incurs this cost. */
     private final int delta;
 
     /**
-     * 4×4 similarity (mismatch-penalty) matrix.
-     * Indexed by {@link #indexOf(char)}.
+     * The 4×4 mismatch-cost matrix α, indexed by {@link #indexOf(char)}.
+     * {@code alpha[i][j]} is the cost α_{xy} of aligning nucleotide x
+     * (index i) with nucleotide y (index j). Diagonal entries are 0
+     * (no cost for a match); off-diagonal entries are positive penalties.
+     * The matrix is symmetric: α_{xy} = α_{yx}.
      */
-    private final int[][] simMatrix;
+    private final int[][] alpha;
 
-    /** First DNA sequence. */
+    /** The first DNA sequence s = s₁s₂…sₘ. */
     private final String s;
 
-    /** Second DNA sequence. */
+    /** The second DNA sequence t = t₁t₂…tₙ. */
     private final String t;
 
     // -----------------------------------------------------------------------
@@ -53,76 +67,99 @@ public class DNAAlign {
     /**
      * Constructs a DNAAlign instance with all parameters needed for alignment.
      *
-     * @param delta     the gap penalty
-     * @param simMatrix the 4×4 mismatch-penalty matrix (A,C,G,T order)
-     * @param s         the first DNA sequence
-     * @param t         the second DNA sequence
+     * @param delta the gap penalty δ
+     * @param alpha the 4×4 mismatch-cost matrix α (rows/columns in A,C,G,T order)
+     * @param s     the first DNA sequence
+     * @param t     the second DNA sequence
      */
-    public DNAAlign(int delta, int[][] simMatrix, String s, String t) {
-        this.delta     = delta;
-        this.simMatrix = simMatrix;
-        this.s         = s.toUpperCase();
-        this.t         = t.toUpperCase();
+    public DNAAlign(int delta, int[][] alpha, String s, String t) {
+        this.delta = delta;
+        this.alpha = alpha;
+        this.s = s.toUpperCase();
+        this.t = t.toUpperCase();
     }
 
     // -----------------------------------------------------------------------
-    // Core algorithm
+    // Core algorithm — align(s, t) from §6 of the lecture notes
     // -----------------------------------------------------------------------
 
     /**
-     * Computes the best alignment of {@code s} and {@code t} using the
-     * Needleman–Wunsch O(mn) dynamic programming algorithm, then prints the
-     * result to standard output.
+     * Computes and prints the best alignment of {@code s} and {@code t}
+     * using the sequence-alignment procedure {@code align(s, t)} from §6
+     * of the course lecture notes.
      *
-     * <p><b>Algorithm outline:</b>
+     * <p><b>Subproblem definition.</b>
+     * For i = 0, 1, …, m and j = 0, 1, …, n, we define opt(i, j) to be
+     * the minimum cost of an alignment of the prefixes s₁…sᵢ and t₁…tⱼ.
+     * We store these values in a memoization table M: {@code M[i][j] = opt(i, j)}.
+     *
+     * <p><b>Base cases (from the lecture notes).</b>
+     * <ul>
+     *   <li>opt(i, 0) = i · δ  — aligning s₁…sᵢ with the empty string
+     *       requires i gaps, each costing δ.</li>
+     *   <li>opt(0, j) = j · δ  — symmetrically for t₁…tⱼ against empty s.</li>
+     * </ul>
+     *
+     * <p><b>Recurrence (from the lecture notes).</b>
+     * For i ≥ 1, j ≥ 1, consider any optimal alignment O of s₁…sᵢ and
+     * t₁…tⱼ. Its last column must be one of three cases:
      * <ol>
-     *   <li>Build an (m+1) × (n+1) DP table where {@code dp[i][j]} is the
-     *       minimum edit distance when aligning {@code s[0..i-1]} with
-     *       {@code t[0..j-1]}.</li>
-     *   <li>Base cases: {@code dp[i][0] = i*delta}, {@code dp[0][j] = j*delta}
-     *       (aligning a prefix against an empty string requires all gaps).</li>
-     *   <li>Recurrence:
-     *       {@code dp[i][j] = min(dp[i-1][j-1] + mismatchPenalty(s[i], t[j]),
-     *                             dp[i-1][j]   + delta,
-     *                             dp[i][j-1]   + delta)}</li>
-     *   <li>Traceback from {@code dp[m][n]} to reconstruct the aligned strings
-     *       and per-column penalties.</li>
+     *   <li>sᵢ is paired with tⱼ: O contains an optimal alignment of
+     *       s₁…s_{i−1} and t₁…t_{j−1}, so the cost is
+     *       α_{sᵢtⱼ} + opt(i−1, j−1).</li>
+     *   <li>sᵢ is unmatched (gap in t): O contains an optimal alignment
+     *       of s₁…s_{i−1} and t₁…tⱼ, so the cost is δ + opt(i−1, j).</li>
+     *   <li>tⱼ is unmatched (gap in s): O contains an optimal alignment
+     *       of s₁…sᵢ and t₁…t_{j−1}, so the cost is δ + opt(i, j−1).</li>
      * </ol>
+     * Therefore:
+     * <pre>
+     *   opt(i, j) = min( α_{sᵢtⱼ} + opt(i−1, j−1),
+     *                    δ          + opt(i−1, j),
+     *                    δ          + opt(i, j−1) )
+     * </pre>
      *
-     * <p><b>Correctness:</b> The recurrence covers every possible case for
-     * a column in the alignment: match/mismatch (diagonal move), gap in t
-     * (up move), or gap in s (left move).  Because every alignment corresponds
-     * to a unique path in the DP table, the globally optimal value is found
-     * at {@code dp[m][n]}.
+     * <p><b>Traceback.</b>
+     * Starting at M[m][n] and working back to M[0][0], at each cell we
+     * determine which of the three cases produced the stored opt value,
+     * and record the corresponding alignment column. The lists are built in
+     * reverse and then reversed at the end.
      *
-     * <p><b>Running time:</b> Filling the (m+1)×(n+1) table is O(mn);
-     * traceback is O(m+n).  Total: O(mn).
+     * <p><b>Running time.</b>
+     * The table M has (m+1)(n+1) entries; each is computed in O(1) time
+     * by the recurrence. Filling M therefore takes O(mn) time. The
+     * traceback from M[m][n] to M[0][0] visits at most m+n cells and
+     * takes O(m+n) time. The overall running time is O(mn).
      */
     public void align() {
         int m = s.length();
         int n = t.length();
 
         // ------------------------------------------------------------------
-        // 1. Build DP table
+        // Step 1: Build the memoization table M where M[i][j] = opt(i, j).
+        // This is the align(s, t) procedure from §6 of the lecture notes.
         // ------------------------------------------------------------------
-        int[][] dp = new int[m + 1][n + 1];
+        int[][] M = new int[m + 1][n + 1];
 
-        // Base cases
-        for (int i = 0; i <= m; i++) dp[i][0] = i * delta;
-        for (int j = 0; j <= n; j++) dp[0][j] = j * delta;
+        // Base cases: opt(i, 0) = i·δ  and  opt(0, j) = j·δ
+        for (int i = 0; i <= m; i++) M[i][0] = i * delta;
+        for (int j = 0; j <= n; j++) M[0][j] = j * delta;
 
-        // Fill table
+        // Fill bottom-up using the recurrence from the lecture notes:
+        //   M[i][j] = min( α_{sᵢtⱼ} + M[i-1][j-1],
+        //                  δ          + M[i-1][j],
+        //                  δ          + M[i][j-1]  )
         for (int i = 1; i <= m; i++) {
             for (int j = 1; j <= n; j++) {
-                int matchCost = dp[i - 1][j - 1] + mismatchPenalty(s.charAt(i - 1), t.charAt(j - 1));
-                int gapInT   = dp[i - 1][j]     + delta;  // gap inserted in t (under s[i])
-                int gapInS   = dp[i][j - 1]     + delta;  // gap inserted in s (under t[j])
-                dp[i][j] = Math.min(matchCost, Math.min(gapInT, gapInS));
+                int pairCost = alphaCost(s.charAt(i - 1), t.charAt(j - 1)) + M[i - 1][j - 1];
+                int gapInT   = delta + M[i - 1][j];   // sᵢ unmatched
+                int gapInS   = delta + M[i][j - 1];   // tⱼ unmatched
+                M[i][j] = Math.min(pairCost, Math.min(gapInT, gapInS));
             }
         }
 
         // ------------------------------------------------------------------
-        // 2. Traceback to reconstruct alignment
+        // Step 2: Traceback from M[m][n] to reconstruct the alignment.
         // ------------------------------------------------------------------
         List<Character> alignS    = new ArrayList<>();
         List<Character> alignT    = new ArrayList<>();
@@ -131,34 +168,34 @@ public class DNAAlign {
         int i = m, j = n;
         while (i > 0 || j > 0) {
             if (i > 0 && j > 0) {
-                int pen = mismatchPenalty(s.charAt(i - 1), t.charAt(j - 1));
-                if (dp[i][j] == dp[i - 1][j - 1] + pen) {
-                    // Diagonal: match or mismatch
+                int pen = alphaCost(s.charAt(i - 1), t.charAt(j - 1));
+                if (M[i][j] == pen + M[i - 1][j - 1]) {
+                    // Case 1: sᵢ paired with tⱼ (match or mismatch)
                     alignS.add(s.charAt(i - 1));
                     alignT.add(t.charAt(j - 1));
                     penalties.add(pen);
                     i--; j--;
-                } else if (dp[i][j] == dp[i - 1][j] + delta) {
-                    // Up: gap in t
+                } else if (M[i][j] == delta + M[i - 1][j]) {
+                    // Case 2: sᵢ unmatched — gap inserted in t
                     alignS.add(s.charAt(i - 1));
                     alignT.add('-');
                     penalties.add(delta);
                     i--;
                 } else {
-                    // Left: gap in s
+                    // Case 3: tⱼ unmatched — gap inserted in s
                     alignS.add('-');
                     alignT.add(t.charAt(j - 1));
                     penalties.add(delta);
                     j--;
                 }
             } else if (i > 0) {
-                // Remaining characters in s → gaps in t
+                // Consumed all of t; remaining sᵢ characters become gaps
                 alignS.add(s.charAt(i - 1));
                 alignT.add('-');
                 penalties.add(delta);
                 i--;
             } else {
-                // Remaining characters in t → gaps in s
+                // Consumed all of s; remaining tⱼ characters become gaps
                 alignS.add('-');
                 alignT.add(t.charAt(j - 1));
                 penalties.add(delta);
@@ -166,15 +203,15 @@ public class DNAAlign {
             }
         }
 
-        // Traceback produces the alignment in reverse; reverse all three lists.
+        // Traceback produces the alignment in reverse; flip all three lists.
         Collections.reverse(alignS);
         Collections.reverse(alignT);
         Collections.reverse(penalties);
 
         // ------------------------------------------------------------------
-        // 3. Print result
+        // Step 3: Print the result.
         // ------------------------------------------------------------------
-        printAlignment(alignS, alignT, penalties, dp[m][n]);
+        printAlignment(alignS, alignT, penalties, M[m][n]);
     }
 
     // -----------------------------------------------------------------------
@@ -182,20 +219,23 @@ public class DNAAlign {
     // -----------------------------------------------------------------------
 
     /**
-     * Returns the mismatch penalty for aligning nucleotide {@code a} with
-     * nucleotide {@code b} as given by the similarity matrix.
+     * Returns the mismatch cost α_{ab} for aligning nucleotide {@code a}
+     * with nucleotide {@code b}, as given by the matrix {@link #alpha}.
+     * When {@code a == b} this returns 0 (a perfect match); otherwise it
+     * returns the positive penalty from the similarity matrix.
      *
      * @param a a nucleotide character (A, C, G, or T)
      * @param b a nucleotide character (A, C, G, or T)
-     * @return  the penalty for aligning {@code a} with {@code b}
+     * @return  α_{ab}, the alignment cost for the pair (a, b)
      */
-    private int mismatchPenalty(char a, char b) {
-        return simMatrix[indexOf(a)][indexOf(b)];
+    private int alphaCost(char a, char b) {
+        return alpha[indexOf(a)][indexOf(b)];
     }
 
     /**
-     * Returns the index of a nucleotide in the canonical order A=0, C=1,
-     * G=2, T=3.
+     * Returns the index of a nucleotide in the canonical ordering
+     * A=0, C=1, G=2, T=3, which is used to look up entries in the
+     * mismatch-cost matrix α.
      *
      * @param  c a nucleotide character (A, C, G, or T)
      * @return   the index 0–3
@@ -211,20 +251,19 @@ public class DNAAlign {
 
     /**
      * Formats and prints the aligned sequences, per-column penalties, and
-     * minimum edit distance to standard output.
+     * minimum edit distance to standard output in the required format.
      *
-     * @param alignS    aligned characters from the first sequence (with gaps)
-     * @param alignT    aligned characters from the second sequence (with gaps)
-     * @param penalties per-column penalty values
-     * @param minDist   the minimum edit distance
+     * @param alignS    characters from s in the alignment (gaps shown as '-')
+     * @param alignT    characters from t in the alignment (gaps shown as '-')
+     * @param penalties per-column cost values corresponding to the alignment
+     * @param minCost   the minimum edit distance opt(m, n) = M[m][n]
      */
     private void printAlignment(List<Character> alignS,
                                 List<Character> alignT,
                                 List<Integer>   penalties,
-                                int             minDist) {
+                                int             minCost) {
         System.out.println("The best alignment is\n");
 
-        // Build display strings (space-separated)
         StringBuilder sbS = new StringBuilder();
         StringBuilder sbT = new StringBuilder();
         StringBuilder sbP = new StringBuilder();
@@ -239,7 +278,7 @@ public class DNAAlign {
         System.out.println(sbS);
         System.out.println(sbT);
         System.out.println(sbP);
-        System.out.println("\nwith the minimum edit distance of " + minDist + ".");
+        System.out.println("\nwith the minimum edit distance of " + minCost + ".");
     }
 
     // -----------------------------------------------------------------------
@@ -247,22 +286,11 @@ public class DNAAlign {
     // -----------------------------------------------------------------------
 
     /**
-     * Entry point.  Reads the input file, constructs a {@link DNAAlign}
-     * instance, and calls {@link #align()}.
+     * Entry point. Reads the input file, constructs a {@link DNAAlign}
+     * instance, and calls {@link #align()} to compute and print the result.
      *
-     * <p>Expected input-file format:
-     * <pre>
-     *   &lt;delta&gt;
-     *   &lt;row for A: four integers&gt;
-     *   &lt;row for C: four integers&gt;
-     *   &lt;row for G: four integers&gt;
-     *   &lt;row for T: four integers&gt;
-     *   &lt;sequence s&gt;
-     *   &lt;sequence t&gt;
-     * </pre>
-     *
-     * @param args command-line arguments; {@code args[0]} must be the path to
-     *             the input file
+     * @param args command-line arguments; {@code args[0]} must be the path
+     *             to the input file
      */
     public static void main(String[] args) {
         if (args.length < 1) {
@@ -272,26 +300,26 @@ public class DNAAlign {
 
         try (Scanner sc = new Scanner(new BufferedReader(new FileReader(args[0])))) {
 
-            // Read gap penalty
+            // Read the gap penalty δ
             int delta = sc.nextInt();
 
-            // Read 4×4 similarity matrix
-            int[][] simMatrix = new int[4][4];
+            // Read the 4×4 mismatch-cost matrix α (rows in A, C, G, T order)
+            int[][] alpha = new int[4][4];
             for (int r = 0; r < 4; r++) {
                 for (int c = 0; c < 4; c++) {
-                    simMatrix[r][c] = sc.nextInt();
+                    alpha[r][c] = sc.nextInt();
                 }
             }
 
-            // Read the two sequences
+            // Read the two DNA sequences s and t
             String s = sc.next();
             String t = sc.next();
 
-            // Run alignment
-            new DNAAlign(delta, simMatrix, s, t).align();
+            // Run the alignment
+            new DNAAlign(delta, alpha, s, t).align();
 
         } catch (FileNotFoundException e) {
-            System.err.println("Error: file not found – " + args[0]);
+            System.err.println("Error: file not found — " + args[0]);
             System.exit(1);
         }
     }

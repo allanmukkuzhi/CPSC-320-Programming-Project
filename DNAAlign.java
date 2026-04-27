@@ -4,33 +4,31 @@ import java.util.*;
 /**
  * DNAAlign.java
  *
- * <p>Reads a gap penalty delta (δ), a 4×4 mismatch-cost matrix (α), and two DNA
+ * Reads a gap penalty delta (δ), a 4×4 mismatch-cost matrix (α), and two DNA
  * sequences from a plain-text file, then computes and prints the best alignment
  * and its minimum edit distance.
  *
- * <p>The algorithm is the sequence-alignment dynamic programming procedure
+ * The algorithm is the sequence-alignment dynamic programming procedure
  * {@code align(s, t)} from §6 of the course lecture notes. We define
  * {@code opt(i, j)} as the minimum cost of an alignment of the prefixes
- * s₁…sᵢ and t₁…tⱼ, and store all values in a memoization table M
+ * s₁...sᵢ and t₁...tⱼ, and store all values in a memoization table M
  * (so {@code M[i][j] = opt(i, j)}). After filling M bottom-up, we traceback
  * from {@code M[m][n]} to reconstruct the actual aligned strings and
  * per-column penalties.
  *
- * <p>Usage: {@code java DNAAlign <inputFile>}
+ * Usage: {@code java DNAAlign <inputFile>}
  *
- * <p>APIs used: {@code java.io.BufferedReader}, {@code java.io.FileReader},
+ * APIs used: {@code java.io.BufferedReader}, {@code java.io.FileReader},
  * {@code java.util.Scanner}, {@code java.util.ArrayList},
  * {@code java.util.Collections}.
  *
- * @author [Your Name]
- * @author [Partner Name]
+ * @author Varvara Esina
+ * @author Allan Mukkuzhi
  * @version 1.0
  */
 public class DNAAlign {
 
-    // -----------------------------------------------------------------------
-    // Constants
-    // -----------------------------------------------------------------------
+    // CONSTANTS
 
     /**
      * Canonical ordering of nucleotides used to index the mismatch-cost
@@ -38,9 +36,7 @@ public class DNAAlign {
      */
     private static final String NUCLEOTIDES = "ACGT";
 
-    // -----------------------------------------------------------------------
-    // Fields
-    // -----------------------------------------------------------------------
+    // FIELDS
 
     /** The gap penalty δ. Every unmatched character (gap) incurs this cost. */
     private final int delta;
@@ -54,15 +50,13 @@ public class DNAAlign {
      */
     private final int[][] alpha;
 
-    /** The first DNA sequence s = s₁s₂…sₘ. */
+    /** The first DNA sequence s = s₁s₂...sₘ. */
     private final String s;
 
-    /** The second DNA sequence t = t₁t₂…tₙ. */
+    /** The second DNA sequence t = t₁t₂...tₙ. */
     private final String t;
 
-    // -----------------------------------------------------------------------
-    // Constructor
-    // -----------------------------------------------------------------------
+    // CONSTRUCTORS
 
     /**
      * Constructs a DNAAlign instance with all parameters needed for alignment.
@@ -79,88 +73,59 @@ public class DNAAlign {
         this.t = t.toUpperCase();
     }
 
-    // -----------------------------------------------------------------------
-    // Core algorithm — align(s, t) from §6 of the lecture notes
-    // -----------------------------------------------------------------------
+    // CORE ALGORITHM - align(s, t) from §6 of the lecture notes
 
     /**
      * Computes and prints the best alignment of {@code s} and {@code t}
      * using the sequence-alignment procedure {@code align(s, t)} from §6
      * of the course lecture notes.
      *
-     * <p><b>Subproblem definition.</b>
-     * For i = 0, 1, …, m and j = 0, 1, …, n, we define opt(i, j) to be
-     * the minimum cost of an alignment of the prefixes s₁…sᵢ and t₁…tⱼ.
+     * Subproblem definition:
+     * For i = 0, 1, 2, ..., m and j = 0, 1, 2, ..., n, we define opt(i, j) to be
+     * the minimum cost of an alignment of the prefixes s₁...sᵢ and t₁...tⱼ.
      * We store these values in a memoization table M: {@code M[i][j] = opt(i, j)}.
      *
-     * <p><b>Base cases (from the lecture notes).</b>
-     * <ul>
-     *   <li>opt(i, 0) = i · δ  — aligning s₁…sᵢ with the empty string
-     *       requires i gaps, each costing δ.</li>
-     *   <li>opt(0, j) = j · δ  — symmetrically for t₁…tⱼ against empty s.</li>
-     * </ul>
+     * Base cases (from the lecture notes):
+     * opt(i, 0) = i · δ — aligning s₁...sᵢ with the empty string requires i gaps.
+     * opt(0, j) = j · δ — symmetrically for t₁...tⱼ against empty s.
      *
-     * <p><b>Recurrence (from the lecture notes).</b>
-     * For i ≥ 1, j ≥ 1, consider any optimal alignment O of s₁…sᵢ and
-     * t₁…tⱼ. Its last column must be one of three cases:
-     * <ol>
-     *   <li>sᵢ is paired with tⱼ: O contains an optimal alignment of
-     *       s₁…s_{i−1} and t₁…t_{j−1}, so the cost is
-     *       α_{sᵢtⱼ} + opt(i−1, j−1).</li>
-     *   <li>sᵢ is unmatched (gap in t): O contains an optimal alignment
-     *       of s₁…s_{i−1} and t₁…tⱼ, so the cost is δ + opt(i−1, j).</li>
-     *   <li>tⱼ is unmatched (gap in s): O contains an optimal alignment
-     *       of s₁…sᵢ and t₁…t_{j−1}, so the cost is δ + opt(i, j−1).</li>
-     * </ol>
-     * Therefore:
-     * <pre>
-     *   opt(i, j) = min( α_{sᵢtⱼ} + opt(i−1, j−1),
-     *                    δ          + opt(i−1, j),
-     *                    δ          + opt(i, j−1) )
-     * </pre>
+     * Recurrence (from the lecture notes):
+     * For i ≥ 1, j ≥ 1, the value opt(i, j) is the minimum of:
+     * 1. Match/Mismatch: α_{sᵢtⱼ} + opt(i-1, j-1)
+     * 2. Gap in t: δ + opt(i-1, j)
+     * 3. Gap in s: δ + opt(i, j-1)
      *
-     * <p><b>Traceback.</b>
+     * Traceback:
      * Starting at M[m][n] and working back to M[0][0], at each cell we
      * determine which of the three cases produced the stored opt value,
-     * and record the corresponding alignment column. The lists are built in
-     * reverse and then reversed at the end.
+     * and record the corresponding alignment column.
      *
-     * <p><b>Running time.</b>
-     * The table M has (m+1)(n+1) entries; each is computed in O(1) time
-     * by the recurrence. Filling M therefore takes O(mn) time. The
-     * traceback from M[m][n] to M[0][0] visits at most m+n cells and
-     * takes O(m+n) time. The overall running time is O(mn).
+     * Running time:
+     * The table M has (m+1)(n+1) entries; each is computed in O(1) time.
+     * Filling M takes O(mn) time and the traceback takes O(m+n) time.
      */
     public void align() {
         int m = s.length();
         int n = t.length();
 
-        // ------------------------------------------------------------------
         // Step 1: Build the memoization table M where M[i][j] = opt(i, j).
-        // This is the align(s, t) procedure from §6 of the lecture notes.
-        // ------------------------------------------------------------------
         int[][] M = new int[m + 1][n + 1];
 
         // Base cases: opt(i, 0) = i·δ  and  opt(0, j) = j·δ
         for (int i = 0; i <= m; i++) M[i][0] = i * delta;
         for (int j = 0; j <= n; j++) M[0][j] = j * delta;
 
-        // Fill bottom-up using the recurrence from the lecture notes:
-        //   M[i][j] = min( α_{sᵢtⱼ} + M[i-1][j-1],
-        //                  δ          + M[i-1][j],
-        //                  δ          + M[i][j-1]  )
+        // Fill bottom-up using the recurrence from the lecture notes
         for (int i = 1; i <= m; i++) {
             for (int j = 1; j <= n; j++) {
                 int pairCost = alphaCost(s.charAt(i - 1), t.charAt(j - 1)) + M[i - 1][j - 1];
-                int gapInT   = delta + M[i - 1][j];   // sᵢ unmatched
-                int gapInS   = delta + M[i][j - 1];   // tⱼ unmatched
+                int gapInT   = delta + M[i - 1][j];
+                int gapInS   = delta + M[i][j - 1];
                 M[i][j] = Math.min(pairCost, Math.min(gapInT, gapInS));
             }
         }
 
-        // ------------------------------------------------------------------
         // Step 2: Traceback from M[m][n] to reconstruct the alignment.
-        // ------------------------------------------------------------------
         List<Character> alignS    = new ArrayList<>();
         List<Character> alignT    = new ArrayList<>();
         List<Integer>   penalties = new ArrayList<>();
@@ -170,32 +135,27 @@ public class DNAAlign {
             if (i > 0 && j > 0) {
                 int pen = alphaCost(s.charAt(i - 1), t.charAt(j - 1));
                 if (M[i][j] == pen + M[i - 1][j - 1]) {
-                    // Case 1: sᵢ paired with tⱼ (match or mismatch)
                     alignS.add(s.charAt(i - 1));
                     alignT.add(t.charAt(j - 1));
                     penalties.add(pen);
                     i--; j--;
                 } else if (M[i][j] == delta + M[i - 1][j]) {
-                    // Case 2: sᵢ unmatched — gap inserted in t
                     alignS.add(s.charAt(i - 1));
                     alignT.add('-');
                     penalties.add(delta);
                     i--;
                 } else {
-                    // Case 3: tⱼ unmatched — gap inserted in s
                     alignS.add('-');
                     alignT.add(t.charAt(j - 1));
                     penalties.add(delta);
                     j--;
                 }
             } else if (i > 0) {
-                // Consumed all of t; remaining sᵢ characters become gaps
                 alignS.add(s.charAt(i - 1));
                 alignT.add('-');
                 penalties.add(delta);
                 i--;
             } else {
-                // Consumed all of s; remaining tⱼ characters become gaps
                 alignS.add('-');
                 alignT.add(t.charAt(j - 1));
                 penalties.add(delta);
@@ -203,26 +163,20 @@ public class DNAAlign {
             }
         }
 
-        // Traceback produces the alignment in reverse; flip all three lists.
         Collections.reverse(alignS);
         Collections.reverse(alignT);
         Collections.reverse(penalties);
 
-        // ------------------------------------------------------------------
-        // Step 3: Print the result.
-        // ------------------------------------------------------------------
+        // Step 3: Print result
         printAlignment(alignS, alignT, penalties, M[m][n]);
     }
 
-    // -----------------------------------------------------------------------
-    // Helper methods
-    // -----------------------------------------------------------------------
+    // HELPER METHODS
 
     /**
      * Returns the mismatch cost α_{ab} for aligning nucleotide {@code a}
      * with nucleotide {@code b}, as given by the matrix {@link #alpha}.
-     * When {@code a == b} this returns 0 (a perfect match); otherwise it
-     * returns the positive penalty from the similarity matrix.
+     * When {@code a == b} this returns 0; otherwise it returns the penalty.
      *
      * @param a a nucleotide character (A, C, G, or T)
      * @param b a nucleotide character (A, C, G, or T)
@@ -234,8 +188,7 @@ public class DNAAlign {
 
     /**
      * Returns the index of a nucleotide in the canonical ordering
-     * A=0, C=1, G=2, T=3, which is used to look up entries in the
-     * mismatch-cost matrix α.
+     * A=0, C=1, G=2, T=3, used for matrix lookup.
      *
      * @param  c a nucleotide character (A, C, G, or T)
      * @return   the index 0–3
@@ -251,12 +204,12 @@ public class DNAAlign {
 
     /**
      * Formats and prints the aligned sequences, per-column penalties, and
-     * minimum edit distance to standard output in the required format.
+     * minimum edit distance to standard output.
      *
-     * @param alignS    characters from s in the alignment (gaps shown as '-')
-     * @param alignT    characters from t in the alignment (gaps shown as '-')
-     * @param penalties per-column cost values corresponding to the alignment
-     * @param minCost   the minimum edit distance opt(m, n) = M[m][n]
+     * @param alignS    characters from s in the alignment
+     * @param alignT    characters from t in the alignment
+     * @param penalties per-column cost values
+     * @param minCost   the minimum edit distance opt(m, n)
      */
     private void printAlignment(List<Character> alignS,
                                 List<Character> alignT,
@@ -281,16 +234,13 @@ public class DNAAlign {
         System.out.println("\nwith the minimum edit distance of " + minCost + ".");
     }
 
-    // -----------------------------------------------------------------------
-    // Entry point
-    // -----------------------------------------------------------------------
+    // ENTRY POINT
 
     /**
      * Entry point. Reads the input file, constructs a {@link DNAAlign}
-     * instance, and calls {@link #align()} to compute and print the result.
+     * instance, and calls {@link #align()} to compute result.
      *
-     * @param args command-line arguments; {@code args[0]} must be the path
-     *             to the input file
+     * @param args command-line arguments; {@code args[0]} is the input file
      */
     public static void main(String[] args) {
         if (args.length < 1) {
@@ -299,11 +249,8 @@ public class DNAAlign {
         }
 
         try (Scanner sc = new Scanner(new BufferedReader(new FileReader(args[0])))) {
-
-            // Read the gap penalty δ
             int delta = sc.nextInt();
 
-            // Read the 4×4 mismatch-cost matrix α (rows in A, C, G, T order)
             int[][] alpha = new int[4][4];
             for (int r = 0; r < 4; r++) {
                 for (int c = 0; c < 4; c++) {
@@ -311,11 +258,9 @@ public class DNAAlign {
                 }
             }
 
-            // Read the two DNA sequences s and t
             String s = sc.next();
             String t = sc.next();
 
-            // Run the alignment
             new DNAAlign(delta, alpha, s, t).align();
 
         } catch (FileNotFoundException e) {
